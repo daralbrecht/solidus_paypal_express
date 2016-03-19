@@ -1,3 +1,5 @@
+require 'rspec/active_model/mocks'
+
 describe Spree::Gateway::PayPalExpress do
   let(:gateway) { Spree::Gateway::PayPalExpress.create!(name: "PayPalExpress") }
 
@@ -22,7 +24,7 @@ describe Spree::Gateway::PayPalExpress do
 
       pp_details_response = double(
         get_express_checkout_details_response_details: double(
-          PaymentDetails: {
+          payment_details: {
             OrderTotal: {
               currencyID: "USD",
               value: "10.00"
@@ -39,7 +41,7 @@ describe Spree::Gateway::PayPalExpress do
             PaymentAction: "Authorization",
             Token: "fake_token",
             PayerID: "fake_payer_id",
-            PaymentDetails: pp_details_response.get_express_checkout_details_response_details.PaymentDetails
+            PaymentDetails: pp_details_response.get_express_checkout_details_response_details.payment_details
           }})
     end
 
@@ -48,7 +50,7 @@ describe Spree::Gateway::PayPalExpress do
       response = double(
         'pp_response',
         success?: true,
-        errors: []
+        to_hash: {}
       )
       allow(response).
         to receive_message_chain("do_express_checkout_payment_response_details.payment_info.first.transaction_id").and_return '12345'
@@ -64,8 +66,7 @@ describe Spree::Gateway::PayPalExpress do
       response = double(
         'pp_response',
         success?: false,
-        errors: [
-          double('pp_response_error', long_message: "An error goes here.")])
+        to_hash: { message: "An error goes here." })
 
       allow(response).
         to receive_message_chain("do_express_checkout_payment_response_details.payment_info.first.transaction_id").and_return '12345'
