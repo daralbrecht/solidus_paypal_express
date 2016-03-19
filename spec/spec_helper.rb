@@ -34,11 +34,8 @@ require "show_me_the_cookies"
 require 'coffee_script'
 require 'sass'
 
-
-require 'capybara/poltergeist'
-
-Capybara.javascript_driver = :poltergeist
-Capybara.default_wait_time = 15
+Capybara.javascript_driver = :selenium
+Capybara.default_max_wait_time = 15
 
 Dir[File.join(File.dirname(__FILE__), 'support/**/*.rb')].each { |f| require f }
 

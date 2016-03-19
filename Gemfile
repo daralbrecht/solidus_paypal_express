@@ -7,7 +7,6 @@ gem 'pg'
 group :test do
  gem 'capybara'
  gem 'capybara-screenshot'
- gem 'poltergeist'
 end
 
 gemspec
