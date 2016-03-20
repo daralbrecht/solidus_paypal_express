@@ -1,12 +1,10 @@
-require 'paypal-sdk-merchant'
+require 'paypal-sdk-rest'
 module Spree
   class Gateway::PayPalExpress < Gateway
     preference :use_new_layout, :boolean, default: true
-    preference :login, :string
-    preference :password, :string
-    preference :signature, :string
+    preference :client_id, :string
+    preference :client_secret, :string
     preference :server, :string, default: 'sandbox'
-    preference :solution, :string, default: 'Mark'
     preference :landing_page, :string, default: 'Billing'
     preference :logourl, :string, default: ''
 
@@ -15,16 +13,15 @@ module Spree
     end
 
     def provider_class
-      ::PayPal::SDK::Merchant::API
+      ::PayPal::SDK::REST
     end
 
     def provider
-      ::PayPal::SDK.configure(
+      provider_class.set_config(
         mode: preferred_server.present? ? preferred_server : "sandbox",
-        username: preferred_login,
-        password: preferred_password,
-        signature: preferred_signature)
-      provider_class.new
+        client_id: preferred_client_id,
+        client_secret: preferred_client_secret)
+      provider_class
     end
 
     def auto_capture?
@@ -39,15 +36,7 @@ module Spree
     # express_checkout :: Spree::PaypalExpressCheckout
     # gateway_options :: hash
     def authorize(amount, express_checkout, gateway_options={})
-      response =
-        do_authorize(express_checkout.token, express_checkout.payer_id)
-
-      # TODO don't do this, use authorization instead
-      # this is a hold over from old code.
-      # I don't think this actually even used by anything?
-      express_checkout.update transaction_id: response.authorization
-
-      response
+      do_authorize(express_checkout)
     end
 
     # https://developer.paypal.com/docs/classic/api/merchant/DoCapture_API_Operation_NVP/
@@ -56,6 +45,7 @@ module Spree
       do_capture(amount_cents, authorization, currency)
     end
 
+    # TODO: rebuild this to use paypal-sdk-rest
     def credit(credit_cents, transaction_id, originator:, **_options)
       payment = originator.payment
       amount = credit_cents / 100.0
@@ -86,107 +76,42 @@ module Spree
         refund_transaction_response.refund_transaction_id)
     end
 
-    def server_domain
-      self.preferred_server == "live" ?  "" : "sandbox."
-    end
-
-    def express_checkout_url(pp_response, extra_params={})
-      params = {
-        token: pp_response.Token
-      }.merge(extra_params)
-
-      if self.preferred_use_new_layout
-        "https://www.#{server_domain}paypal.com/checkoutnow/2?"
-      else
-        "https://www.#{server_domain}paypal.com/cgi-bin/webscr?" +
-          "cmd=_express-checkout&force_sa=true&"
-      end +
-      URI.encode_www_form(params)
-    end
-
-    def do_authorize(token, payer_id)
-      response =
-        self.
-        provider.
-        do_express_checkout_payment(
-          checkout_payment_params(token, payer_id))
-
-      build_response(response, authorization_transaction_id(response))
+    def do_authorize(express_checkout)
+      payment = provider::Payment.find(express_checkout.payment_id)
+      status = payment.execute(payer_id: express_checkout.payer_id)
+      build_authorization_response(status, payment)
     end
 
     def do_capture(amount_cents, authorization, currency)
-      response = provider.
-        do_capture(
-          provider.build_do_capture(
-            amount: amount_cents / 100.0,
-            authorization_id: authorization,
-            completetype: "Complete",
-            currencycode: options[:currency]))
+      authorization = provider::Authorization.find(authorization)
+      capture = authorization.capture({
+        amount: {
+          currency: currency,
+          total: amount_cents / 100.0 },
+        is_final_capture: true })
 
-      build_response(response, capture_transaction_id(response))
+      build_capture_response(capture)
     end
 
-    def capture_transaction_id(response)
-      response.do_capture_response_details.payment_info.transaction_id
-    end
-
-    # response ::
-    #   PayPal::SDK::Merchant::DataTypes::DoExpressCheckoutPaymentResponseType
-    def authorization_transaction_id(response)
-      response.
-        do_express_checkout_payment_response_details.
-        payment_info.
-        first.
-        transaction_id
-    end
-
-    def build_response(response, transaction_id)
+    def build_authorization_response(status, payment)
       ActiveMerchant::Billing::Response.new(
-        response.success?,
-        JSON.pretty_generate(response.to_hash),
-        response.to_hash,
-        authorization: transaction_id,
+        status,
+        JSON.pretty_generate(payment.to_hash),
+        payment.to_hash,
+        authorization: payment.transactions[0].related_resources[0].authorization.id,
+        test: sandbox?)
+     end
+
+    def build_capture_response(capture)
+      ActiveMerchant::Billing::Response.new(
+        capture.success?,
+        JSON.pretty_generate(capture.to_hash),
+        capture.to_hash,
         test: sandbox?)
     end
 
-    def payment_details(token)
-      self.
-        provider.
-        get_express_checkout_details(
-          checkout_details_params(token)).
-        get_express_checkout_details_response_details.
-        payment_details
-    end
-
-    def checkout_payment_params(token, payer_id)
-      self.
-        provider.
-        build_do_express_checkout_payment(
-          build_checkout_payment_params(
-            token,
-            payer_id,
-            payment_details(token)))
-    end
-
-    def checkout_details_params(token)
-      self.
-        provider.
-        build_get_express_checkout_details(Token: token)
-    end
-
-    def build_checkout_payment_params(token, payer_id, payment_details)
-      {
-        DoExpressCheckoutPaymentRequestDetails: {
-          PaymentAction: "Authorization",
-          Token: token,
-          PayerID: payer_id,
-          PaymentDetails: payment_details
-        }
-      }
-    end
-
     def sandbox?
-      self.preferred_server == "sandbox"
+      self.preferred_server == 'sandbox'
     end
   end
 end
