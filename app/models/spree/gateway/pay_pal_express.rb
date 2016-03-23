@@ -18,7 +18,7 @@ module Spree
 
     def provider
       provider_class.set_config(
-        mode: preferred_server.present? ? preferred_server : "sandbox",
+        mode: preferred_server.present? ? preferred_server : 'sandbox',
         client_id: preferred_client_id,
         client_secret: preferred_client_secret)
       provider_class
@@ -45,41 +45,33 @@ module Spree
       do_capture(amount_cents, authorization, currency)
     end
 
-    # TODO: rebuild this to use paypal-sdk-rest
     def credit(credit_cents, transaction_id, originator:, **_options)
       payment = originator.payment
-      amount = credit_cents / 100.0
+      amount = sprintf("%0.02f", credit_cents / 100.0)
 
-      refund_type = payment.amount == amount.to_f ? "Full" : "Partial"
+      transaction = provider::Capture.find(payment.transaction_id)
+      refund = transaction.refund({
+        :amount => {
+          :currency => payment.currency,
+          :total => amount
+        }
+      })
 
-      refund_transaction = provider.build_refund_transaction(
-        { TransactionID: payment.transaction_id,
-          RefundType: refund_type,
-          Amount: {
-            currencyID: payment.currency,
-            value: amount },
-          RefundSource: "any" })
-
-      refund_transaction_response = provider.refund_transaction(refund_transaction)
-
-      if refund_transaction_response.success?
-        payment.source.update_attributes(
-          { refunded_at: Time.now,
-            refund_transaction_id: refund_transaction_response.RefundTransactionID,
-            state: "refunded",
-            refund_type: refund_type
+      if refund.success?
+        payment.source.update_attributes({
+          refunded_at: Time.now,
+          refund_transaction_id: refund.id,
+          state: 'refunded'
         })
       end
 
-      build_response(
-        refund_transaction_response,
-        refund_transaction_response.refund_transaction_id)
+      build_transaction_response(refund)
     end
 
     def do_authorize(express_checkout)
       payment = provider::Payment.find(express_checkout.payment_id)
-      status = payment.execute(payer_id: express_checkout.payer_id)
-      build_authorization_response(status, payment)
+      payment.execute(payer_id: express_checkout.payer_id)
+      build_authorization_response(payment)
     end
 
     def do_capture(amount_cents, authorization, currency)
@@ -90,23 +82,25 @@ module Spree
           total: amount_cents / 100.0 },
         is_final_capture: true })
 
-      build_capture_response(capture)
+      build_transaction_response(capture)
     end
 
-    def build_authorization_response(status, payment)
+    # TODO: think about connecting two methods below into one
+    def build_authorization_response(payment)
       ActiveMerchant::Billing::Response.new(
-        status,
+        payment.success?,
         JSON.pretty_generate(payment.to_hash),
         payment.to_hash,
         authorization: payment.transactions[0].related_resources[0].authorization.id,
         test: sandbox?)
      end
 
-    def build_capture_response(capture)
+    def build_transaction_response(transaction)
       ActiveMerchant::Billing::Response.new(
-        capture.success?,
-        JSON.pretty_generate(capture.to_hash),
-        capture.to_hash,
+        transaction.success?,
+        transaction.success? ? JSON.pretty_generate(transaction.to_hash) : transaction.error[:message],
+        transaction.to_hash,
+        authorization: transaction.id,
         test: sandbox?)
     end
 
