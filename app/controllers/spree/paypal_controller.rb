@@ -15,13 +15,13 @@ module Spree
       additional_adjustments.eligible.each do |adjustment|
         next if (tax_adjustments + shipping_adjustments).include?(adjustment)
         items << { name: adjustment.label,
-                   price: sprintf( "%0.02f", adjustment.amount),
+                   price: sprintf("%0.02f", adjustment.amount),
                    currency: order.currency,
                    quantity: 1 }
       end
       unless order.shipment_total.zero?
         items << { name: 'Shipment',
-                   price: sprintf( "%0.02f", order.shipment_total),
+                   price: sprintf("%0.02f", order.shipment_total),
                    currency: order.currency,
                    quantity: 1 }
       end
@@ -54,7 +54,7 @@ module Spree
               payment_id: params[:paymentId]
             }
           ),
-          amount: sprintf( "%0.02f", order.total),
+          amount: sprintf("%0.02f", order.total),
           payment_method: payment_method
         }
       )
@@ -86,7 +86,7 @@ module Spree
         {
           name: item.product.name,
           sku: item.variant.sku,
-          price: sprintf( "%0.02f", item.price),
+          price: sprintf("%0.02f", item.price),
           currency: item.order.currency,
           quantity: item.quantity
         }
@@ -118,7 +118,7 @@ module Spree
         item_list: {
           items: items },
         amount: {
-          total: current_order.total,
+          total: sprintf("%0.02f", current_order.total),
           currency: current_order.currency },
         description: 'Does this description is showed to client?'
       }]

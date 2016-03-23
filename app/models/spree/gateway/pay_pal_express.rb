@@ -79,7 +79,7 @@ module Spree
       capture = authorization.capture({
         amount: {
           currency: currency,
-          total: amount_cents / 100.0 },
+          total: sprintf("%0.02f", amount_cents / 100.0) },
         is_final_capture: true })
 
       build_transaction_response(capture)
