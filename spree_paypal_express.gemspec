@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.version     = SpreePayPalExpress::VERSION
   s.summary     = 'Adds PayPal Express as a Payment Method to Spree Commerce'
   s.description = s.summary
-  s.required_ruby_version = '>= 1.9.3'
+  s.required_ruby_version = '>= 2.0.0'
 
   s.author       = 'Spree Commerce'
   s.email        = 'gems@spreecommerce.com'
