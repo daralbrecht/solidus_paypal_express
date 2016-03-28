@@ -30,7 +30,7 @@ module Spree
 
       begin
         if payment.create
-          redirect_to  payment.links.find{|v| v.method == "REDIRECT" }.href
+          redirect_to payment.links.find{|v| v.method == "REDIRECT" }.href
         else
           flash[:error] = Spree.t('flash.generic_error', scope: 'paypal', reasons: payment.error[:details].map(&:issue).join(' '))
           redirect_to checkout_state_path(:payment)
